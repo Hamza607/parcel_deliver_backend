@@ -7,12 +7,6 @@ const seedData = require('./utils/seed');
 
 dotenv.config();
 
-// Connect to MongoDB
-connectDB().then(() => {
-  // Automatically ensure default admin & demo records
-  seedData();
-});
-
 const app = express();
 
 // Middlewares
@@ -22,7 +16,25 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Health check route
+// Database connection middleware for serverless requests
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection error',
+      error: err.message,
+    });
+  }
+});
+
+// Root & Health check routes
+app.get('/', (req, res) => {
+  res.json({ message: 'Parcel Delivery Backend API is running on Vercel!' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
@@ -48,8 +60,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+// Only listen when executed directly (local development)
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  connectDB().then(() => {
+    seedData();
+    app.listen(PORT, () => {
+      console.log(`Parcel Delivery System Server running on port ${PORT}`);
+    });
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Parcel Delivery System Server running on port ${PORT}`);
-});
+// Export for Vercel Serverless Functions
+module.exports = app;
